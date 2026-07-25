@@ -7,6 +7,9 @@ import Network from './pages/Network';
 import Analytics from './pages/Analytics';
 import CrimeMapPage from './pages/CrimeMap';
 import FIRDetails from './pages/FIRDetails';
+import NetworkGraph from './components/GraphView/NetworkGraph';
+import LiveCrimeMap from './components/MapView/CrimeMap';
+import AnalyticsDashboard from './components/Analytics/AnalyticsDashboard';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -38,6 +41,12 @@ export default function App() {
         return <CrimeMapPage />;
       case 'fir':
         return <FIRDetails />;
+      case 'network_live':
+        return <NetworkGraph firId="4/2023" />;
+      case 'map_live':
+        return <LiveCrimeMap />;
+      case 'analytics_live':
+        return <AnalyticsDashboard />;
       default:
         return <Dashboard />;
     }

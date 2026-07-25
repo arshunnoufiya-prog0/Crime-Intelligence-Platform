@@ -6,7 +6,10 @@ export default function Sidebar({ currentPage = 'dashboard', onNavigate }) {
     { id: 'network', label: '🔗 Network Analysis', icon: '🔗' },
     { id: 'map', label: '🗺️ Crime Map', icon: '🗺️' },
     { id: 'analytics', label: '📈 Analytics', icon: '📈' },
-    { id: 'fir', label: '📋 FIR Details', icon: '📋' }
+    { id: 'fir', label: '📋 FIR Details', icon: '📋' },
+    { id: 'network_live', label: '🔗 Live Network', icon: '🔗' },
+    { id: 'map_live', label: '🗺️ Live Map', icon: '🗺️' },
+    { id: 'analytics_live', label: '📈 Live Stats', icon: '📈' },
   ];
 
   return (

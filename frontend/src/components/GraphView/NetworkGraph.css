@@ -1,0 +1,27 @@
+.graph-box {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.graph-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #1a202c;
+}
+
+.graph-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 450px;
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.graph-status.error {
+  color: #e53e3e;
+}
