@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    model_path: str = "./models/Qwen2.5-4B-Instruct-Q8_0.gguf"
+    model_path: str = "./models/Qwen3.5-4B-Instruct-Q8_0.gguf"
     ctx_size: int = 8192
     n_gpu_layers: int = -1
     n_parallel: int = 4

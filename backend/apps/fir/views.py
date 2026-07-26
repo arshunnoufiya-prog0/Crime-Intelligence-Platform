@@ -272,12 +272,24 @@ def fir_stats(request):
         .order_by("month")
     )
 
+    # District x CaseCategory cross-tab for the analytics heatmap.
+    by_district_category: dict[str, dict[str, int]] = {}
+    for row in (
+        qs.values("district__name", "case_category")
+        .annotate(c=Count("id"))
+        .order_by("district__name", "case_category")
+    ):
+        dname = row["district__name"] or "Unknown"
+        cat = row["case_category"] or "Unknown"
+        by_district_category.setdefault(dname, {})[cat] = row["c"]
+
     return JsonResponse({
         "total": total,
         "by_status": by_status,
         "by_category": by_category,
         "by_crime_head": by_crime,
         "by_month": {str(k): v for k, v in by_month.items()},
+        "by_district_category": by_district_category,
     })
 
 

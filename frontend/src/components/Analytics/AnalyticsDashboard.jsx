@@ -25,14 +25,22 @@ export default function AnalyticsDashboard() {
   const byCategory = stats?.by_category || {};
   const byCrime = stats?.by_crime_head || {};
   const byMonth = stats?.by_month || {};
+  const byDistrictCategory = stats?.by_district_category || {};
 
   const statusLabels = Object.keys(byStatus);
   const statusValues = Object.values(byStatus);
-  const categoryLabels = Object.keys(byCategory);
-  const categoryValues = Object.values(byCategory);
   const crimeLabels = Object.keys(byCrime);
   const crimeValues = Object.values(byCrime);
   const monthLabels = Object.keys(byMonth).sort();
+
+  // Heatmap data: district (y) x crime_category (x), value = count
+  const districtLabels = Object.keys(byDistrictCategory).sort();
+  const categoryLabels = Array.from(
+    new Set(districtLabels.flatMap((d) => Object.keys(byDistrictCategory[d])))
+  ).sort();
+  const heatmapZ = districtLabels.map((d) =>
+    categoryLabels.map((c) => byDistrictCategory[d]?.[c] || 0)
+  );
 
   return (
     <div className="analytics-box">
@@ -70,15 +78,19 @@ export default function AnalyticsDashboard() {
         />
         <Plot
           data={[{
-            type: 'pie',
-            labels: categoryLabels,
-            values: categoryValues,
-            marker: { colors: ['#8B5CF6', '#EC4899'] },
+            type: 'heatmap',
+            x: categoryLabels,
+            y: districtLabels,
+            z: heatmapZ,
+            colorscale: 'YlOrRd',
+            hovertemplate: 'District: %{y}<br>Category: %{x}<br>FIRs: %{z}<extra></extra>',
           }]}
           layout={{
-            title: 'Case Category',
+            title: 'District × Crime Category',
             height: 300,
-            margin: { l: 10, r: 10, t: 40, b: 10 },
+            margin: { l: 120, r: 20, t: 40, b: 60 },
+            xaxis: { tickangle: -30 },
+            yaxis: { automargin: true },
           }}
           config={{ responsive: true }}
           style={{ width: '100%' }}
