@@ -1,18 +1,58 @@
 """
-Django settings for crime-intelligence platform.
-All values via python-decouple config(); no hardcoded secrets.
+Django settings for the KSP Investigative Intelligence System (spec §17).
+
+Env via python-dotenv per §3.1 pins. JWT_SECRET/SECRET_KEY fail HARD at
+startup when unset — no dev defaults (§0.4, §17).
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
-from decouple import config
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = config("SECRET_KEY")
-DEBUG = config("DEBUG", default=True, cast=bool)
-ALLOWED_HOSTS = [h.strip() for h in config("ALLOWED_HOSTS", default="localhost,127.0.0.1").split(",")]
+
+def _raw(name: str, default: str | None, required: bool) -> str | None:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        if required:
+            raise ImproperlyConfigured(f"{name} is required and not set (spec §0.4 fail loud)")
+        return default
+    return value
+
+
+def env_str(name: str, default: str | None = None, *, required: bool = False) -> str | None:
+    return _raw(name, default, required)
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    value = _raw(name, None, False)
+    if value is None:
+        return default
+    return value.lower() in ("1", "true", "yes")
+
+
+def env_int(name: str, default: int = 0) -> int:
+    value = _raw(name, None, False)
+    if value is None:
+        return default
+    return int(value)
+
+
+def env_list(name: str, default: list | None = None) -> list:
+    value = _raw(name, None, False)
+    if value is None:
+        return list(default or [])
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
+SECRET_KEY = env_str("SECRET_KEY", required=True)
+DEBUG = env_bool("DEBUG", default=False)
+ALLOWED_HOSTS = env_list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -22,11 +62,10 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
-    "auditlog",
     "apps.accounts",
     "apps.fir",
     "apps.audit",
-    "apps.llm",
+    "apps.intel",
 ]
 
 MIDDLEWARE = [
@@ -39,7 +78,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.accounts.middleware.JWTAuthMiddleware",
-    "auditlog.middleware.AuditlogMiddleware",
     "apps.audit.middleware.RequestAuditMiddleware",
 ]
 
@@ -66,11 +104,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": config("DB_NAME"),
-        "USER": config("DB_USER"),
-        "PASSWORD": config("DB_PASSWORD"),
-        "HOST": config("DB_HOST"),
-        "PORT": config("DB_PORT", cast=int),
+        "NAME": env_str("DB_NAME", required=True),
+        "USER": env_str("DB_USER", required=True),
+        "PASSWORD": env_str("DB_PASSWORD", required=True),
+        "HOST": env_str("DB_HOST", default="postgres"),
+        "PORT": env_int("DB_PORT", default=5432),
         "CONN_MAX_AGE": 60,
     }
 }
@@ -92,34 +130,34 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.CustomUser"
 
-# JWT settings
-JWT_SECRET = config("JWT_SECRET")
-JWT_ALGORITHM = config("JWT_ALGORITHM", default="HS256")
-JWT_ACCESS_MINUTES = config("JWT_ACCESS_MINUTES", default=15, cast=int)
-JWT_REFRESH_DAYS = config("JWT_REFRESH_DAYS", default=7, cast=int)
+# ── JWT (spec §17: HS256, fail-hard secret, 30 min access / 12 h refresh) ──
+JWT_SECRET = env_str("JWT_SECRET", required=True)
+JWT_ALGORITHM = "HS256"
+JWT_ACCESS_MINUTES = env_int("JWT_ACCESS_MINUTES", default=30)
+JWT_REFRESH_HOURS = env_int("JWT_REFRESH_HOURS", default=12)
 
-# CORS
-CORS_ALLOWED_ORIGINS = [o.strip() for o in config("CORS_ALLOWED_ORIGINS", default="").split(",") if o.strip()]
+# ── CORS ──────────────────────────────────────────────────────────────────
+CORS_ALLOWED_ORIGINS = env_list("CORS_ALLOWED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
 
-# Graph-RAG
-GRAPH_RAG_URL = config("GRAPH_RAG_URL", default="http://localhost:9000")
-GRAPH_RAG_TIMEOUT = config("GRAPH_RAG_TIMEOUT", default=120, cast=int)
+# ── RAG service (§2.1: Django only authenticates, authorizes, audits,
+#    attaches scope, and proxies the stream — never builds prompts) ─────────
+RAG_URL = env_str("RAG_URL", default="http://rag:9000")
+RAG_API_KEY = env_str("RAG_API_KEY", default="")
+GRAPH_RAG_TIMEOUT = env_int("GRAPH_RAG_TIMEOUT", default=300)
 
-# Auditlog
-AUDITLOG_INCLUDE_ALL_MODELS = False
+# ── Neo4j (FIR CRUD reads the evidentiary domain graph, §2.1/§4) ──────────
+NEO4J_URI = env_str("NEO4J_URI", default="bolt://neo4j:7687")
+NEO4J_USER = env_str("NEO4J_USER", default="neo4j")
+NEO4J_PASSWORD = env_str("NEO4J_PASSWORD", default="")
+NEO4J_DATABASE = env_str("NEO4J_DATABASE", default="neo4j")
 
-# Logging
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "json": {
-            "format": '{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}',
-        },
+        "json": {"format": '{"time": "%(asctime)s", "level": "%(levelname)s", "logger": "%(name)s", "message": "%(message)s"}'},
     },
-    "handlers": {
-        "console": {"class": "logging.StreamHandler", "formatter": "json"},
-    },
+    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }

@@ -12,7 +12,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 
 from .decorators import is_authenticated, super_admin_only
-from .utils import generate_tokens, user_to_dict
+from .utils import generate_tokens, rotate_refresh, user_to_dict
 
 User = get_user_model()
 
@@ -48,19 +48,13 @@ def refresh_view(request):
     except json.JSONDecodeError:
         return JsonResponse({"error": "invalid json", "code": "bad_request"}, status=400)
     refresh = data.get("refresh", "")
-    try:
-        payload = jwt.decode(refresh, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
-    except jwt.PyJWTError:
-        return JsonResponse({"error": "invalid refresh token", "code": "unauthorized"}, status=401)
-    if payload.get("type") != "refresh":
-        return JsonResponse({"error": "not a refresh token", "code": "bad_request"}, status=400)
-    try:
-        user = User.objects.get(pk=payload.get("user_id"))
-    except User.DoesNotExist:
-        return JsonResponse({"error": "user not found", "code": "not_found"}, status=404)
-    if not user.is_active:
-        return JsonResponse({"error": "account disabled", "code": "forbidden"}, status=403)
-    access, new_refresh = generate_tokens(user)
+    tokens = rotate_refresh(refresh)
+    if tokens is None:
+        return JsonResponse(
+            {"error": "invalid, expired or already-used refresh token", "code": "unauthorized"},
+            status=401,
+        )
+    access, new_refresh = tokens
     return JsonResponse({"access": access, "refresh": new_refresh})
 
 

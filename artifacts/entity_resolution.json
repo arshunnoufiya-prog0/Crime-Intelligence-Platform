@@ -1,0 +1,90 @@
+{
+  "spec": "ksp-iis-build-prompt-v3.1 §5.6",
+  "strong_identifiers_available": [
+    "government_id",
+    "date_of_birth",
+    "person_phone"
+  ],
+  "strong_identifiers_present_in_dataset": false,
+  "persons_total": 3824,
+  "distinct_person_nodes": 3824,
+  "placeholder_named_persons_excluded": 752,
+  "merges_performed": 0,
+  "merge_rate_pct": 0.0,
+  "same_name_as_clusters": 286,
+  "same_name_as_edges": 3488,
+  "same_name_as_confidence": 0.5,
+  "same_name_as_sample": [
+    {
+      "name": "AISHWARYA DEVI",
+      "a": "228/2023@HIGH_GROUNDS_PS|complainant|AISHWARYA DEVI",
+      "b": "92/2023@MADIWALA_PS|complainant|AISHWARYA DEVI",
+      "confidence": 0.5,
+      "source_fir": "92/2023@MADIWALA_PS"
+    },
+    {
+      "name": "AISHWARYA HEGDE",
+      "a": "257/2023@HSR_LAYOUT_PS|complainant|AISHWARYA HEGDE",
+      "b": "39/2023@CUBBON_PARK_PS|complainant|AISHWARYA HEGDE",
+      "confidence": 0.5,
+      "source_fir": "39/2023@CUBBON_PARK_PS"
+    },
+    {
+      "name": "AISHWARYA HEGDE",
+      "a": "39/2023@CUBBON_PARK_PS|complainant|AISHWARYA HEGDE",
+      "b": "60/2024@YELAHANKA_PS|complainant|AISHWARYA HEGDE",
+      "confidence": 0.5,
+      "source_fir": "60/2024@YELAHANKA_PS"
+    },
+    {
+      "name": "AISHWARYA HEGDE",
+      "a": "60/2024@YELAHANKA_PS|complainant|AISHWARYA HEGDE",
+      "b": "81/2023@COTTONPET_PS|complainant|AISHWARYA HEGDE",
+      "confidence": 0.5,
+      "source_fir": "81/2023@COTTONPET_PS"
+    },
+    {
+      "name": "AISHWARYA JOSHI",
+      "a": "148/2023@INDIRANAGAR_PS|complainant|AISHWARYA JOSHI",
+      "b": "226/2024@WHITEFIELD_PS|complainant|AISHWARYA JOSHI",
+      "confidence": 0.5,
+      "source_fir": "226/2024@WHITEFIELD_PS"
+    },
+    {
+      "name": "AISHWARYA JOSHI",
+      "a": "226/2024@WHITEFIELD_PS|complainant|AISHWARYA JOSHI",
+      "b": "74/2023@BELLANDUR_PS|complainant|AISHWARYA JOSHI",
+      "confidence": 0.5,
+      "source_fir": "74/2023@BELLANDUR_PS"
+    },
+    {
+      "name": "AISHWARYA KULKARNI",
+      "a": "136/2023@BANASHANKARI_PS|complainant|AISHWARYA KULKARNI",
+      "b": "195/2024@RT_NAGAR_PS|complainant|AISHWARYA KULKARNI",
+      "confidence": 0.5,
+      "source_fir": "195/2024@RT_NAGAR_PS"
+    },
+    {
+      "name": "AISHWARYA KULKARNI",
+      "a": "195/2024@RT_NAGAR_PS|complainant|AISHWARYA KULKARNI",
+      "b": "2/2023@HENNUR_PS|complainant|AISHWARYA KULKARNI",
+      "confidence": 0.5,
+      "source_fir": "2/2023@HENNUR_PS"
+    },
+    {
+      "name": "AISHWARYA KUMAR",
+      "a": "124/2023@CHICKPET_PS|complainant|AISHWARYA KUMAR",
+      "b": "219/2023@YELAHANKA_PS|complainant|AISHWARYA KUMAR",
+      "confidence": 0.5,
+      "source_fir": "219/2023@YELAHANKA_PS"
+    },
+    {
+      "name": "AISHWARYA NAIR",
+      "a": "255/2024@YELAHANKA_PS|complainant|AISHWARYA NAIR",
+      "b": "55/2023@CHICKPET_PS|complainant|AISHWARYA NAIR",
+      "confidence": 0.5,
+      "source_fir": "55/2023@CHICKPET_PS"
+    }
+  ],
+  "note": "No strong identifiers exist in this corpus, so per the §5.6 binding rule no two Person records may merge. Same-name individuals are linked with SAME_NAME_AS (confidence 0.5, name-only) and rendered as dashed 'possible identity match' edges. The system under-links by design (§18.1). SAME_NAME_AS is chained (n-1 edges per cluster) to avoid quadratic blowups."
+}

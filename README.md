@@ -1,103 +1,119 @@
-# crime-intelligence-platform
+# KSP Investigative Intelligence System
 
-## Architecture
+An on-premises investigative intelligence platform for Karnataka State Police:
+1,000 Bengaluru FIRs become an evidentiary Neo4j crime graph plus a LightRAG
+retrieval index, queried in natural language by authenticated investigators,
+answered by a local Qwen3.5-4B with mechanically validated citations.
 
-```
-React (frontend/)  →  Django :8000  →  Graph-RAG :9000  →  inference :8080 (Qwen2.5-4B Q8_0)
-                           ↑                      ↓
-                      PostgreSQL            Neo4j :7687
-                                           (graph + native vector index)
-```
+**Specification:** `ksp-iis-build-prompt-v3.1.md` is the single source of truth.
+Verification evidence lives in `artifacts/verification.md`.
 
-**Boundary rules:**
-- React calls Django only. Never calls graph-rag or inference directly.
-- Django calls graph-rag only. Django never touches Neo4j.
-- graph-rag calls inference for (a) intent classification, (b) grounded summarization. Embedding is in-process (BAAI/bge-m3).
-- The LLM never writes or executes Cypher — it only classifies intents via structured JSON. All Cypher is static and parameterized.
-
-## Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- PostgreSQL 14+ (for Django)
-- Neo4j 5.23 (local instance — Desktop app or `docker run neo4j:5.23`)
-- For inference: Linux/WSL2 + CUDA-capable GPU (Qwen2.5-4B Q8_0 ≈ 4 GB VRAM)
-
-## Quick Start
-
-No Docker Compose orchestration. Run each service in its own terminal.
-
-### 1. Neo4j (single local instance)
+## Architecture (spec §2.1)
 
 ```
-docker run -d --name neo4j -p 7474:7474 -p 7687:7687 \
-  -e NEO4J_AUTH=neo4j/changeme neo4j:5.23
+React :5173/:80 ──HTTPS, JWT──▶ Django :8000 (auth · RBAC · audit · SSE proxy)
+                                   │ bolt (Cypher)              │ HTTP+SSE
+                                   ▼                             ▼
+                     Neo4j :7687 DOMAIN CRIME GRAPH    FastAPI RAG :9000
+                     (evidentiary; source_fir on       (LightRAG · NetworkX ·
+                      every edge)                       intent router · templates)
+                                                                     │
+                                             Qdrant :6333 ◀──────────┤
+                                             (LightRAG vectors)      ▼
+                                                    llama.cpp :8080 gen · :8081 embed · :8082 rerank
+                                                    (Qwen3.5-4B Q8_0 · bge-m3 · bge-reranker, CUDA)
 ```
 
-### 2. inference/ — llama.cpp + Qwen2.5-4B-Instruct Q8_0
+**Storage split (§2.3):** the Neo4j domain graph is *evidentiary* — provably
+derived from FIR records, every edge traces to the FIR that created it. The
+LightRAG KG (NetworkX, in-process) is a *retrieval index* — allowed to be
+lossy. Qdrant holds LightRAG's vectors. Different guarantees, different
+stores; Neo4j's native vector index is deliberately unused.
 
-```
-cd inference
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-bash scripts/build_llamacpp.sh   # requires C++ toolchain + CUDA
-bash scripts/download_model.sh   # downloads qwen2.5-4B-Instruct-Q8_0.gguf
-python -m server.llama_server    # start llama.cpp on :8080
-```
+**Hard boundary (§2.1):** Django never talks to Qdrant or llama.cpp and never
+builds a prompt. Numbers always come from Cypher; narrative from LightRAG.
 
-**Windows note:** inference build scripts are bash (target WSL2). For native Windows, use WSL or build llama.cpp manually with MSVC/CUDA.
+## Quick start (16 GB VRAM CUDA host)
 
-The proxy at `inference/server/api.py` wraps llama-server with ./v1/chat/completions (OpenAI-compatible), /health, /metrics. Zero-hallucination enforce temperature Cap at 0.5 without X-Allow-Creative header.
-
-### 3. graph-rag/ — FastAPI Graph-RAG service
-
-```
-cd graph-rag && python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python scripts/setup_neo4j_schema.py
-python scripts/ingest_firs.py --input ../data/bengaluru_40ps_1000_firs.json
-uvicorn app.main:app --host 0.0.0.0 --port 9000
+```bash
+cp .env.example .env            # fill the secrets — services fail hard without them
+make fetch-models               # Qwen3.5-4B Q8_0 (4.62 GB) + bge-m3 + bge-reranker
+make config                     # compose validation gate
+make build && make up
+make migrate && make seed
+make constraints                # Neo4j constraints (Step 4 gate)
+make ingest                     # Neo4j load + deterministic LightRAG KG (Steps 6+8)
+make measure                    # perf gate: VRAM < 13.5 GB, p50 TTFT < 1.5 s (Step 16)
 ```
 
-Endpoints: `POST /api/v1/query/stream` (SSE), `POST /api/v1/query/sync`, `GET /api/v1/subgraph/{fir_id}`.
+Frontend dev server: `cd frontend && npm install && npm run dev` (:5173 with
+an `/api` proxy to Django :8000). Production: `docker compose -f
+docker-compose.yml -f docker-compose.prod.yml up -d` (nginx serves the built
+frontend; only Django and nginx publish host ports).
 
-### 4. backend/ — Django
+Default accounts (seed command, password `Admin@1234`): `admin@crime.local`
+(SUPER_ADMIN), `analyst@crime.local` (ANALYST), `officer@crime.local`
+(INVESTIGATOR, district-scoped), `viewer@crime.local` (READ_ONLY,
+district-scoped).
 
-```
-cd backend && python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-python manage.py makemigrations
-python manage.py migrate
-python manage.py create_default_users
-python manage.py import_fir_json --file ../data/bengaluru_40ps_1000_firs.json
-python manage.py runserver 8000
-```
+## Tests (§15 gates)
 
-Default accounts (password `Admin@1234`):
-- admin@crime.local (SUPER_ADMIN)
-- analytics@crime.local (ANALYST)
-- officer@crime.local (INVESTIGATOR)
-- viewer@crime.local (READ_ONLY)
-
-### 5. frontend/ — Vite + React
-
-```
-cd frontend && npm install && npm run dev
+```bash
+python3 tests/test_schema_contract.py      # Step 1 — dataset unchanged
+python3 tests/test_context_budget.py      # Step 11 — §11 budget rules
+python3 tests/test_cypher_templates.py    # Step 12 — frozen templates (+EXPLAIN live)
+python3 tests/test_reasoning_split.py      # Step 10 — reasoning never leaks into answers
+python3 tests/test_citation_validator.py   # Step 15 — zero-hallucination gate
+python3 tests/test_rbac_scope.py          # Step 17 — scope injection
+python3 tests/test_e2e_query.py           # Step 19 — login → query → stream (stack required)
 ```
 
-## Env Vars
+## Honest limitations (spec §18)
 
-| Service | File | Key vars |
-|---|---|---|
-| inference/ | .env.example | MODEL_PATH, TEMPERATURE=0.0, HOST/PORT |
-| graph-rag/ | .env.example | NEO4J_URI, NEO4J_PASSWORD, LLM_BASE_URL, EMBED_MODEL |
-| backend/ | .env.example | SECRET_KEY, JWT_SECRET, DB_*, GRAPH_RAG_URL, CORS_ALLOWED_ORIGINS |
+A government-facing tool that overstates its guarantees is worse than one
+that is modest and correct.
 
-## Quality Gates
+1. **Identity resolution under-links by design.** Person records merge only
+   on strong identifiers (government ID, phone, or exact name + date of
+   birth). This corpus carries none of those, so the merge rate is exactly
+   0%. Same-name individuals appear as dashed `SAME_NAME_AS` edges labeled
+   *possible identity match — not confirmed* — never as merges (§5.6, §18.1).
+2. **The LLM never generates Cypher and never computes counts.** Every
+   quantitative claim originates from the Neo4j graph via frozen,
+   parameterized templates; a count the retrieval did not supply triggers an
+   `UNSOURCED_QUANTITY` warning instead of an answer (§10.1, §12.6).
+3. **Model reasoning is displayed separately and is explicitly not a
+   finding.** It is streamed on its own `reasoning` channel, excluded from
+   citation validation, and never stored in the audit log — only its token
+   count is (§1.3).
+4. **Centrality on subgraphs above 2,000 nodes is approximate** (sampled
+   betweenness, k ≤ 500) and is labeled as such in the UI (§13.1, §14.2-7).
+5. **`fir_id` alone is not a unique record key** in this corpus (700 unique
+   values across 1,000 FIRs; 5 exact (id, station) duplicates). Identity in
+   the graph is the composite `fir_key = <fir_id>@<STATION_CODE>`; citations
+   key off the citable `fir_id` with the station rendered alongside
+   (artifacts/schema_report.json → citation_contract).
+6. **The model is multimodal but vision is not wired in v1.** A verified
+   `mmproj-Qwen_Qwen3.5-4B-f16.gguf` exists; evidence-photo and scanned-FIR
+   analysis is a documented future path (§1.4).
+7. **Corpus scale is 1,000 FIRs.** State-scale deployment (millions of FIRs)
+   needs a different storage and indexing strategy and is out of scope (§18.7).
+8. **Indexing is provably LLM-free.** The knowledge graph is built
+   deterministically from the structured JSON (`insert_custom_kg`) — the
+   `INDEXING_IN_PROGRESS` guard makes any indexing-time LLM call raise, and
+   the ingest gate asserts the counter stayed at zero (§2.2, §9).
 
-- **inference:** POST /health → 200 within 60s; same prompt + temp=0.0 → identical output ×10
-- **graph-rag:** GET /health → 200 within 2s; intent classifier routes 10 varied queries; empty results → no_context_event (zero LLM calls); /subgraph/{fir_id} returns force-graph JSON with centrality + communities
-- **backend:** POST /api/llm/graph/query/ → SSE relay; GraphQuery row saved per request
-- **frontend:** NetworkGraph renders from live subgraph endpoint; CrimeMap places FIR markers on leaflet; Analytics shows bar/pie/month chart from /firs/stats/
+## Repository map
+
+```
+data/                        □ FIR dataset — source of truth (1,000 records, 40 stations)
+artifacts/                   generated, committed: verification.md, schema_report.json,
+                             frontend/backend inventories, ingest + perf reports
+rag_service/                 FastAPI RAG (§9–§15): app/{llm,retrieval,graph,router,answer,routes}
+                             ingest/{discover_schema, normalize, load_neo4j, build_custom_kg, run_ingest}
+backend/                     Django 4.2 (§17): accounts (JWT+RBAC), fir, audit, intel proxy
+frontend/                    React/Vite (§14.2 changes 1–8 applied; rest is change-controlled)
+infra/                       llamacpp (b9222 CUDA build + 3 server scripts), neo4j constraints, nginx
+tests/                       §15 gate suites + fixtures/intent_benchmark.json (20 questions)
+scripts/measure.sh           Step 16 perf gate
+```

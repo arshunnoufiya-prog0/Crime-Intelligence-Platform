@@ -21,7 +21,7 @@ class JWTAuthMiddleware(MiddlewareMixin):
             request.user = None
             return None
         try:
-            user = User.objects.get(pk=payload.get("user_id"))
+            user = User.objects.get(pk=payload.get("sub"))
         except User.DoesNotExist:
             request.user = None
             return None

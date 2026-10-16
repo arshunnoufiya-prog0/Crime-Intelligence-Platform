@@ -1,0 +1,236 @@
+# ksp-iis — dev stack (spec §2.1 topology, §16 requirements)
+# Gate: docker compose config   (must be valid)
+# Host-exposed: Django :8000 (+ Neo4j browser :7474 dev-only).
+# Everything else is compose-internal per the §2.4 port map.
+
+name: ksp-iis
+
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+
+x-llama-env: &llama-env
+  ENABLE_MTP: ${ENABLE_MTP:-false}
+  REASONING_FORMAT: ${REASONING_FORMAT:-}
+  RERANK_FLAGS: ${RERANK_FLAGS:-}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:5.23-community
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+      NEO4J_server_memory_heap_max__size: ${NEO4J_HEAP_MAX:-2G}
+      NEO4J_server_memory_pagecache_size: ${NEO4J_PAGECACHE:-2G}
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    ports:
+      - "${NEO4J_BROWSER_PORT:-7474}:7474"
+    volumes:
+      - neo4j_data:/data
+      - ./infra/neo4j:/constraints:ro
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -a bolt://localhost:7687 -u neo4j -p $${NEO4J_PASSWORD:-} 'RETURN 1'"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:6333/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  llama-gen:
+    build:
+      context: .
+      dockerfile: infra/llamacpp/Dockerfile
+      args:
+        LLAMA_TAG: ${LLAMA_TAG:-b9222}
+        CUDA_ARCH: ${CUDA_ARCH:-86}
+    image: ksp-iis/llama-server:latest
+    command: ["run-generation.sh"]
+    environment:
+      <<: *llama-env
+      MODEL_FILE: Qwen_Qwen3.5-4B-Q8_0.gguf
+      CTX_SIZE: ${CTX_SIZE:-32768}
+      PARALLEL: ${PARALLEL:-2}
+    volumes:
+      - models:/models:ro
+    <<: *gpu
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+    restart: unless-stopped
+
+  llama-embed:
+    image: ksp-iis/llama-server:latest
+    build:
+      context: .
+      dockerfile: infra/llamacpp/Dockerfile
+      args:
+        LLAMA_TAG: ${LLAMA_TAG:-b9222}
+        CUDA_ARCH: ${CUDA_ARCH:-86}
+    command: ["run-embeddings.sh"]
+    environment:
+      <<: *llama-env
+      MODEL_FILE: bge-m3-Q8_0.gguf
+    volumes:
+      - models:/models:ro
+    <<: *gpu
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  llama-rerank:
+    profiles: ["rerank"]
+    image: ksp-iis/llama-server:latest
+    build:
+      context: .
+      dockerfile: infra/llamacpp/Dockerfile
+      args:
+        LLAMA_TAG: ${LLAMA_TAG:-b9222}
+        CUDA_ARCH: ${CUDA_ARCH:-86}
+    command: ["run-rerank.sh"]
+    environment:
+      <<: *llama-env
+      MODEL_FILE: bge-reranker-v2-m3-Q8_0.gguf
+      ENABLE_RERANK: ${ENABLE_RERANK:-true}
+    volumes:
+      - models:/models:ro
+    <<: *gpu
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8082/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
+  rag:
+    build:
+      context: ./rag_service
+    image: ksp-iis/rag:latest
+    environment: &rag-env
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_DATABASE: neo4j
+      QDRANT_URL: ${QDRANT_URL}
+      QDRANT_WORKSPACE: ${QDRANT_WORKSPACE:-ksp_iis}
+      LIGHTRAG_WORKING_DIR: ${LIGHTRAG_WORKING_DIR:-/data/lightrag}
+      LIGHTRAG_KV_STORAGE: ${LIGHTRAG_KV_STORAGE}
+      LIGHTRAG_VECTOR_STORAGE: ${LIGHTRAG_VECTOR_STORAGE}
+      LIGHTRAG_GRAPH_STORAGE: ${LIGHTRAG_GRAPH_STORAGE}
+      LIGHTRAG_DOC_STATUS_STORAGE: ${LIGHTRAG_DOC_STATUS_STORAGE}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      EMBED_BASE_URL: ${EMBED_BASE_URL}
+      RERANK_BASE_URL: ${RERANK_BASE_URL}
+      ENABLE_RERANK: ${ENABLE_RERANK:-true}
+      EMBED_DIM: ${EMBED_DIM:-1024}
+      EMBED_MAX_TOKENS: ${EMBED_MAX_TOKENS:-1024}
+      CHUNK_TOKEN_SIZE: ${CHUNK_TOKEN_SIZE:-1000}
+      CHUNK_OVERLAP_TOKEN_SIZE: ${CHUNK_OVERLAP_TOKEN_SIZE:-120}
+      RAG_API_KEY: ${RAG_API_KEY}
+      CYPHER_TIMEOUT_S: ${CYpher_TIMEOUT_S:-5}
+      LIGHTRAG_TIMEOUT_S: ${LIGHTRAG_TIMEOUT_S:-12}
+    volumes:
+      - lightrag_data:/data/lightrag
+      - ./data:/app/data:ro
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      llama-gen:
+        condition: service_healthy
+      llama-embed:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/v1/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    image: ksp-iis/backend:latest
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DEBUG: ${DEBUG:-false}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DB_NAME: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      NEO4J_DATABASE: neo4j
+      RAG_URL: ${RAG_URL:-http://rag:9000}
+      RAG_API_KEY: ${RAG_API_KEY}
+      GRAPH_RAG_TIMEOUT: ${GRAPH_RAG_TIMEOUT:-300}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_MINUTES: ${JWT_ACCESS_MINUTES:-30}
+      JWT_REFRESH_HOURS: ${JWT_REFRESH_HOURS:-12}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+    ports:
+      - "${DJANGO_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      rag:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8000/api/health/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  models:
+  neo4j_data:
+  qdrant_storage:
+  lightrag_data:
+  postgres_data:

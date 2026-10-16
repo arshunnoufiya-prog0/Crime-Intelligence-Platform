@@ -15,10 +15,17 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [user, setUser] = useState(null);
+  const [selectedFirId, setSelectedFirId] = useState(null);
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setIsLoggedIn(true);
+  };
+
+  // §14.2 change 3 plumbing: citation chips deep-link to the FIR detail view.
+  const openFir = (firId) => {
+    setSelectedFirId(firId);
+    setCurrentPage('fir');
   };
 
   if (!isLoggedIn) {
@@ -32,7 +39,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard />;
       case 'chat':
-        return <Chat />;
+        return <Chat onOpenFir={openFir} />;
       case 'network':
         return <Network />;
       case 'analytics':
@@ -40,9 +47,9 @@ export default function App() {
       case 'map':
         return <CrimeMapPage />;
       case 'fir':
-        return <FIRDetails />;
+        return <FIRDetails firId={selectedFirId} />;
       case 'network_live':
-        return <NetworkGraph firId="4/2023" />;
+        return <NetworkGraph firId={selectedFirId || '4/2023'} />;
       case 'map_live':
         return <LiveCrimeMap />;
       case 'analytics_live':

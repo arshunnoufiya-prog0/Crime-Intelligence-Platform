@@ -1,6 +1,7 @@
 import { useRef, useCallback } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useGraphData } from './useGraphData';
+import '../../styles/intel.css';
 import './NetworkGraph.css';
 
 const COLORS = [
@@ -9,6 +10,12 @@ const COLORS = [
   '#E84393', '#00CEC9',
 ];
 
+/**
+ * §14.2 change 6 — dashed edges for SAME_NAME_AS with a legend entry
+ * "possible identity match — not confirmed".
+ * §14.2 change 7 — approximation label when the backend says centrality was
+ * sampled (graph.approximate_centrality, §13.1).
+ */
 export default function NetworkGraph({ firId = '' }) {
   const { graph, loading, error, refetch } = useGraphData(firId);
   const graphRef = useRef(null);
@@ -38,8 +45,13 @@ export default function NetworkGraph({ firId = '' }) {
     ctx.arc(node.x, node.y, size, 0, 2 * Math.PI);
     ctx.fillStyle = color;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 0.5;
+    if (node._label === 'FIR') {
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 2;
+    } else {
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.5;
+    }
     ctx.stroke();
 
     ctx.font = '10px Sans-serif';
@@ -68,6 +80,13 @@ export default function NetworkGraph({ firId = '' }) {
   return (
     <div className="graph-box">
       <h3 className="graph-title">🔗 Criminal Network</h3>
+      <div className="graph-legend">
+        <span className="legend-item"><span className="legend-line legend-solid" /> confirmed (from FIR records)</span>
+        <span className="legend-item"><span className="legend-line legend-dashed" /> possible identity match — not confirmed</span>
+        {graph?.approximate_centrality && (
+          <span className="legend-item legend-approx">centrality approximate (sampled over large subgraph)</span>
+        )}
+      </div>
       <ForceGraph2D
         ref={graphRef}
         graphData={graph}
@@ -75,8 +94,9 @@ export default function NetworkGraph({ firId = '' }) {
         nodeColor={nodeColor}
         linkDirectionalArrowLength={0}
         linkWidth={(link) => link.type === 'SIMILAR_PATTERN' ? 2 : 1}
-        linkColor={(link) => link.type === 'SIMILAR_PATTERN' ? '#e74c3c' : '#999'}
-        linkLabel={(link) => link.type}
+        linkLineDash={(link) => (link.type === 'SAME_NAME_AS' ? [4, 3] : null)}
+        linkColor={(link) => (link.type === 'SAME_NAME_AS' ? '#b45309' : (link.type === 'SIMILAR_PATTERN' ? '#e74c3c' : '#999'))}
+        linkLabel={(link) => (link.type === 'SAME_NAME_AS' ? 'possible identity match — not confirmed' : link.type)}
         onNodeClick={handleNodeClick}
         width={780}
         height={450}

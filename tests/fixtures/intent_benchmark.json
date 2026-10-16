@@ -1,0 +1,105 @@
+{
+  "spec": "ksp-iis-build-prompt-v3.1 §15.2 — 20 realistic investigator questions covering all 12 intents, including two deliberately ambiguous ones that must land on FREEFORM_SEARCH. Values (stations, gangs, names, identifiers) are real corpus entities. Gate: >= 18/20 accuracy (Step 13).",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Show me FIR 17/2023 registered at Indiranagar PS.",
+      "expected_intent": "FIR_LOOKUP"
+    },
+    {
+      "id": 2,
+      "question": "What is the status of case 2/2023 at Magadi Road PS?",
+      "expected_intent": "FIR_LOOKUP"
+    },
+    {
+      "id": 3,
+      "question": "Show all cases involving Karthik alias 'Red Pulsar'.",
+      "expected_intent": "PERSON_PROFILE"
+    },
+    {
+      "id": 4,
+      "question": "Which FIRs did Ananya Sharma file as complainant?",
+      "expected_intent": "PERSON_PROFILE"
+    },
+    {
+      "id": 5,
+      "question": "Map the network of the PhishNet Syndicate gang.",
+      "expected_intent": "PERSON_NETWORK"
+    },
+    {
+      "id": 6,
+      "question": "Who are the associates of Vikram Sharma alias 'Apex'?",
+      "expected_intent": "PERSON_NETWORK"
+    },
+    {
+      "id": 7,
+      "question": "Chain snatching linked to two-wheelers in Jayanagar since January 2024.",
+      "expected_intent": "PATTERN_SEARCH"
+    },
+    {
+      "id": 8,
+      "question": "All burglary FIRs at Indiranagar PS between 2024-03-01 and 2024-06-30.",
+      "expected_intent": "PATTERN_SEARCH"
+    },
+    {
+      "id": 9,
+      "question": "How many FIRs were registered at HSR Layout PS in 2024?",
+      "expected_intent": "STATION_STATS"
+    },
+    {
+      "id": 10,
+      "question": "Compare the caseload of each police station for the whole year.",
+      "expected_intent": "STATION_STATS"
+    },
+    {
+      "id": 11,
+      "question": "How has vehicle theft changed month by month?",
+      "expected_intent": "CRIME_TREND"
+    },
+    {
+      "id": 12,
+      "question": "Show the trend of cyber fraud cases through 2024.",
+      "expected_intent": "CRIME_TREND"
+    },
+    {
+      "id": 13,
+      "question": "Who are the repeat offenders accused in three or more FIRs?",
+      "expected_intent": "REPEAT_OFFENDERS"
+    },
+    {
+      "id": 14,
+      "question": "Which FIRs are linked to phone +919876543210?",
+      "expected_intent": "SHARED_IDENTIFIER"
+    },
+    {
+      "id": 15,
+      "question": "Find cases connected through vehicle KA-05-MB-1122.",
+      "expected_intent": "SHARED_IDENTIFIER"
+    },
+    {
+      "id": 16,
+      "question": "Show thefts reported around HSR Layout area.",
+      "expected_intent": "GEO_CLUSTER"
+    },
+    {
+      "id": 17,
+      "question": "Find burglaries where gold jewelry was stolen.",
+      "expected_intent": "MODUS_OPERANDI_MATCH"
+    },
+    {
+      "id": 18,
+      "question": "Trace the evidence trail for Nagaraj alias 'Kala Nag'.",
+      "expected_intent": "EVIDENCE_TRAIL"
+    },
+    {
+      "id": 19,
+      "question": "Is the Red Pulsar gang expanding beyond Banashankari?",
+      "expected_intent": "FREEFORM_SEARCH"
+    },
+    {
+      "id": 20,
+      "question": "Why do chain snatchings cluster near main roads in South Bengaluru?",
+      "expected_intent": "FREEFORM_SEARCH"
+    }
+  ]
+}

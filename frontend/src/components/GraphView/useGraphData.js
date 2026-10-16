@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
+/**
+ * §14.2 change 8 — dead endpoint removal: the old /api/llm/graph/subgraph/
+ * route died with the LightRAG migration; this now calls the intel route.
+ */
 function useGraphData(firId) {
   const [graph, setGraph] = useState({ nodes: [], links: [] });
   const [loading, setLoading] = useState(false);
@@ -12,33 +16,34 @@ function useGraphData(firId) {
     setError(null);
     try {
       const token = localStorage.getItem('access_token');
-      const resp = await axios.get(`/api/llm/graph/subgraph/${id}/`, {
+      const resp = await axios.get(`/api/intel/graph/subgraph/${id}/`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const data = resp.data;
-      if (data.error) {
+      const data = resp.data?.ok === true ? resp.data.data : resp.data;
+      if (data && data.error) {
         setError(data.error);
         return;
       }
       setGraph({
-        nodes: (data.nodes || []).map((n) => ({
+        approximate_centrality: Boolean(data?.approximate_centrality),
+        nodes: (data?.nodes || []).map((n) => ({
           id: n.id,
-          label: (n.properties && (n.properties.name || n.properties.fir_id || n.properties.label)) || n.id,
+          label: (n.properties && (n.properties.name || n.properties.fir_id)) || n.label || n.id,
           ...n.properties,
           degree: n.degree || 0,
           betweenness: n.betweenness || 0,
           eigenvector: n.eigenvector || 0,
           community: n.community || 0,
-          _label: n.label,
+          _label: n._label || n.label,
         })),
-        links: (data.links || []).map((l) => ({
+        links: (data?.links || []).map((l) => ({
           source: l.source,
           target: l.target,
           type: l.type || 'RELATED',
         })),
       });
     } catch (err) {
-      setError(err.message || err.response?.data?.error || 'Failed to fetch graph');
+      setError(err.message || err.response?.data?.error?.message || 'Failed to fetch graph');
     } finally {
       setLoading(false);
     }
