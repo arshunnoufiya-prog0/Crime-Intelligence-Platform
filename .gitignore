@@ -1,0 +1,23 @@
+# models/ — spec §4: volume, gitignored (populated by `make fetch-models`)
+models/
+*.gguf
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/dist.zip
+
+# Secrets / local env
+.env
+
+# OS / misc
+.DS_Store
+*.log
+.build/

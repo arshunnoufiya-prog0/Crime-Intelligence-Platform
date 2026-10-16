@@ -1,8 +1,11 @@
 Django==4.2.13
 PyJWT==2.8.0
-django-cors-headers==4.3.1
-django-auditlog==2.3.0
+neo4j==5.28.1
+httpx==0.27.2
+python-dotenv==1.0.1
 psycopg2-binary==2.9.9
-python-decouple==3.8
-bcrypt==4.1.2
-httpx[http2]==0.27.2
+gunicorn==22.0.0
+# Deviation from spec §3.1, recorded in artifacts/backend_inventory.md:
+# django-cors-headers is kept for the Vite dev origin (:5173). nginx serves
+# prod, where CORS is same-origin.
+django-cors-headers==4.3.1
